@@ -1,0 +1,38 @@
+@startuml Fetch
+participant AppWithDFClient [
+	=App&DFClient
+]
+
+participant DFServerCQThread [
+    =DFServer
+    ----
+    ""CQ Thread""
+]
+
+participant DFServerFetchThread [
+    =DFServer
+    ----
+    ""Fetch Thread""
+]
+
+skinparam sequenceMessageAlign center
+
+hnote over AppWithDFClient : Allocate and set buffer.
+activate AppWithDFClient
+AppWithDFClient -> DFServerFetchThread : Send RPC (buffer_id, size)
+deactivate AppWithDFClient
+activate DFServerFetchThread
+DFServerFetchThread -> AppWithDFClient : Fetch data with RDMA read
+deactivate DFServerFetchThread
+hnote over DFServerCQThread : CQ completion event occurs.
+activate DFServerCQThread
+DFServerCQThread -> DFServerFetchThread : CQ completed. Wake up Fetch thread.
+deactivate DFServerCQThread
+activate DFServerFetchThread
+hnote over DFServerFetchThread : Process data.
+DFServerFetchThread -> AppWithDFClient : Send RPC (ack)
+deactivate DFServerFetchThread
+activate AppWithDFClient
+hnote over AppWithDFClient : Free buffer.
+deactivate AppWithDFClient
+@enduml

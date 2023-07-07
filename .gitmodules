@@ -1,0 +1,15 @@
+[submodule "lib/rdma-core"]
+	path = lib/rdma-core
+	url = https://github.com/linux-rdma/rdma-core.git
+[submodule "lib/log.c"]
+	path = lib/log.c
+	url = https://github.com/yulistic/log.c.git
+[submodule "lib/microbench_timestat"]
+	path = lib/microbench_timestat
+	url = https://github.com/yulistic/microbench_timestat.git
+[submodule "lib/c-thread-pool"]
+	path = lib/c-thread-pool
+	url = https://github.com/yulistic/c-thread-pool.git
+[submodule "lib/BitArray"]
+	path = lib/BitArray
+	url = https://github.com/noporpoise/BitArray.git
