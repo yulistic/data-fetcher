@@ -18,6 +18,7 @@
 /* In this module, a server pulls data from a client by RDMA read. */
 
 #define RDMA_SQ_DEPTH 16
+#define RDMA_RQ_DEPTH 16
 
 static void deregister_mrs(struct rdma_ch_cb *cb);
 static void free_buffers(struct rdma_ch_cb *cb);
@@ -260,7 +261,7 @@ static int create_qp(struct rdma_ch_cb *cb)
 
 	// TODO: Check configuration.
 	init_attr.cap.max_send_wr = RDMA_SQ_DEPTH;
-	init_attr.cap.max_recv_wr = 2;
+	init_attr.cap.max_recv_wr = RDMA_RQ_DEPTH;
 	init_attr.cap.max_recv_sge = 1;
 	init_attr.cap.max_send_sge = 1;
 	init_attr.qp_type = IBV_QPT_RC;
