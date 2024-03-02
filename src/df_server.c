@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "log.h"
-#include "rdma.h"
+#include "df_rdma.h"
 #include "bit_array.h"
 #include "data_fetcher.h"
 
@@ -38,7 +38,7 @@ int init_df_server(int port, uint64_t databuf_size, int databuf_cnt,
 	// 	goto err1;
 	// }
 
-	df_ctx->ch_cb = init_rdma_ch(&rdma_attr);
+	df_ctx->ch_cb = df_init_rdma_ch(&rdma_attr);
 	if (!df_ctx->ch_cb) {
 		log_error("Failed to initialize RDMA channel.");
 		goto err1;
@@ -68,7 +68,7 @@ err1:
 char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length)
 {
 	int ret;
-	ret = post_rdma_read(df_ctx->ch_cb, buf_id, length);
+	ret = df_post_rdma_read(df_ctx->ch_cb, buf_id, length);
 
 	if (ret < 0) {
 		log_error("RDMA read failed.");
@@ -80,7 +80,7 @@ char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length)
 
 void destroy_df_server(struct data_fetcher_ctx *df_ctx)
 {
-	destroy_rdma_server(df_ctx->ch_cb);
+	df_destroy_rdma_server(df_ctx->ch_cb);
 
 	pthread_spin_destroy(&df_ctx->buf_bitmap.lock);
 	bit_array_free(df_ctx->buf_bitmap.map);

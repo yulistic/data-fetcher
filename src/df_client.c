@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <assert.h>
 #include "log.h"
-#include "rdma.h"
+#include "df_rdma.h"
 #include "data_fetcher.h"
 #include "bit_array.h"
 
@@ -62,7 +62,7 @@ int init_df_client(char *target, int port, uint64_t databuf_size,
 		goto err1;
 	}
 
-	df_ctx->ch_cb = init_rdma_ch(&rdma_attr);
+	df_ctx->ch_cb = df_init_rdma_ch(&rdma_attr);
 	if (!df_ctx->ch_cb) {
 		log_error("Failed to initialize RDMA channel.");
 		goto err1;
@@ -82,7 +82,7 @@ err1:
 
 void destroy_df_client(struct data_fetcher_ctx *df_ctx)
 {
-	destroy_rdma_client(df_ctx->ch_cb);
+	df_destroy_rdma_client(df_ctx->ch_cb);
 	free(df_ctx);
 }
 
@@ -129,7 +129,7 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
  * @param length The length of copied data. It should be less than `databuf_size`.
  * @return int Allocated buf_id. It needs to be delivered to Server.
  */
-int set_buffer(struct data_fetcher_ctx *df_ctx, char *data, uint64_t length)
+int df_set_buffer(struct data_fetcher_ctx *df_ctx, char *data, uint64_t length)
 {
 	char *rdma_buf;
 	int buf_id;
@@ -147,6 +147,39 @@ int set_buffer(struct data_fetcher_ctx *df_ctx, char *data, uint64_t length)
 	return buf_id;
 }
 
+/**
+  * @brief Allocated buf_id and get the Data Fetcher's RDMA buffer.
+  * Caller should check the size of data when filling this buffer. Use
+  * df_buf_size() function.
+  * 
+  * @param df_ctx 
+  * @param buf_p Data buffer pointer is passed.
+  * @return int buf_id
+  */
+int df_alloc_buffer(struct data_fetcher_ctx *df_ctx, char **buf_p)
+{
+	int buf_id;
+
+	buf_id = alloc_databuf_id(df_ctx);
+	*buf_p = get_buffer(df_ctx, buf_id);
+
+	return buf_id;
+}
+
+/**
+ * @brief Returns the RDMA buffer size.
+ * 
+ * @param df_ctx 
+ * @return uint64_t 
+ */
+uint64_t df_buf_size(struct data_fetcher_ctx *df_ctx)
+{
+	struct rdma_ch_cb *ch_cb;
+
+	ch_cb = (struct rdma_ch_cb *)df_ctx->ch_cb;
+	return ch_cb->databuf_size;
+}
+
 static void free_databuf_id(struct data_fetcher_ctx *df_ctx, uint64_t bit_id)
 {
 	lock_databuf(df_ctx);
@@ -160,7 +193,7 @@ static void free_databuf_id(struct data_fetcher_ctx *df_ctx, uint64_t bit_id)
  * @param df_ctx
  * @param buf_id Data buffer id.
  */
-void free_buffer(struct data_fetcher_ctx *df_ctx, int buf_id)
+void df_free_buffer(struct data_fetcher_ctx *df_ctx, int buf_id)
 {
 	// Free buffer.
 	free_databuf_id(df_ctx, buf_id);

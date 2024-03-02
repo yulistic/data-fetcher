@@ -32,7 +32,7 @@ int main()
 		len++; // Including null character.
 
 		// Write to buffer.
-		buf_id = set_buffer(df_ctx, &data[i][0], len);
+		buf_id = df_set_buffer(df_ctx, &data[i][0], len);
 
 		printf("Buffer is ready. buf_id=%d len=%d\n", buf_id, len);
 
@@ -47,7 +47,7 @@ int main()
 
 	// Free buffers.
 	for (i = 0; i < DATABUF_CNT; i++) {
-		free_buffer(df_ctx, i);
+		df_free_buffer(df_ctx, i);
 	}
 
 	printf("Press Ctrl+c to exit.\n");

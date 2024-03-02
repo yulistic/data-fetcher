@@ -1,5 +1,5 @@
-#ifndef _RDMA_H_
-#define _RDMA_H_
+#ifndef _DF_RDMA_H_
+#define _DF_RDMA_H_
 #include <rdma/rdma_cma.h>
 #include <sys/types.h>
 #include <semaphore.h>
@@ -129,10 +129,10 @@ struct rdma_ch_cb {
 		*child_cm_id; /* connection on server side, per client */
 };
 
-struct rdma_ch_cb *init_rdma_ch(struct rdma_ch_attr *attr);
-void destroy_rdma_client(struct rdma_ch_cb *cb);
-void destroy_rdma_server(struct rdma_ch_cb *cb);
-int post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
-		   uint32_t length);
+struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr);
+void df_destroy_rdma_client(struct rdma_ch_cb *cb);
+void df_destroy_rdma_server(struct rdma_ch_cb *cb);
+int df_post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
+		      uint32_t length);
 
 #endif

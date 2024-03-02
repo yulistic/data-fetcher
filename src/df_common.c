@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "bit_array.h"
 #include "data_fetcher.h"
-#include "rdma.h"
+#include "df_rdma.h"
 #include "log.h"
 
 /**

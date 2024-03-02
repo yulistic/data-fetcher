@@ -29,8 +29,10 @@ char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length);
 int init_df_client(char *target, int port, uint64_t databuf_size,
 		   int databuf_cnt, struct data_fetcher_ctx **df_ctx_p);
 void destroy_df_client(struct data_fetcher_ctx *df_ctx);
-int set_buffer(struct data_fetcher_ctx *df_ctx, char *data, uint64_t length);
-void free_buffer(struct data_fetcher_ctx *df_ctx, int buf_id);
+int df_set_buffer(struct data_fetcher_ctx *df_ctx, char *data, uint64_t length);
+int df_alloc_buffer(struct data_fetcher_ctx *df_ctx, char **buf_p);
+uint64_t df_buf_size(struct data_fetcher_ctx *df_ctx);
+void df_free_buffer(struct data_fetcher_ctx *df_ctx, int buf_id);
 
 /* Library internal use */
 void *get_buffer(struct data_fetcher_ctx *df_ctx, int buf_id);

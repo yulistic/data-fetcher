@@ -49,7 +49,7 @@ inc = include_directories('include')
 data_fetcher_lib_srcs = [ \
 # 'lib/c-thread-pool/thpool.c',
 'lib/log.c/src/log.c',
-'src/channel/rdma.c',
+'src/df_rdma.c',
 'src/df_common.c',
 'src/df_server.c',
 'src/df_client.c',

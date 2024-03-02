@@ -12,7 +12,7 @@
 // #include <netinet/in.h>
 // #include <infiniband/arch.h>
 #include <rdma/rdma_cma.h>
-#include "rdma.h"
+#include "df_rdma.h"
 #include "log.h"
 
 /* In this module, a server pulls data from a client by RDMA read. */
@@ -167,7 +167,7 @@ static int cma_event_handler(struct rdma_cm_id *cma_id,
 	return ret;
 }
 
-void *cm_thread(void *arg)
+void *df_cm_thread(void *arg)
 {
 	struct rdma_ch_cb *cb = (struct rdma_ch_cb *)arg;
 	struct rdma_cm_event *event;
@@ -692,7 +692,7 @@ err0:
 }
 
 // Per server thread.
-void *run_server(void *arg)
+void *run_df_server(void *arg)
 {
 	int ret;
 	char res[50];
@@ -871,8 +871,8 @@ static inline uint64_t alloc_seqn(struct databuf_ctx *db_ctx)
  * @param length The length of data to read.
  * @return int 
  */
-int post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
-		   uint32_t length)
+int df_post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
+		      uint32_t length)
 {
 	struct rdma_ch_cb *cb;
 	struct ibv_send_wr *bad_wr;
@@ -901,7 +901,7 @@ int post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
 	return 0;
 }
 
-static int run_client(struct rdma_ch_cb *cb)
+static int run_df_client(struct rdma_ch_cb *cb)
 {
 	int ret;
 
@@ -1010,7 +1010,7 @@ static void free_buf_ctxs(struct rdma_ch_cb *cb)
  * @param attr Attributes for an RDMA connection.
  * @return struct rdma_ch_cb* Returns rdma_ch_cb pointer. Return NULL on failure.
  */
-struct rdma_ch_cb *init_rdma_ch(struct rdma_ch_attr *attr)
+struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr)
 {
 	struct rdma_ch_cb *cb;
 	int ret;
@@ -1053,20 +1053,21 @@ struct rdma_ch_cb *init_rdma_ch(struct rdma_ch_attr *attr)
 		goto out2;
 	}
 
-	ret = pthread_create(&cb->cmthread, NULL, cm_thread, cb);
+	ret = pthread_create(&cb->cmthread, NULL, df_cm_thread, cb);
 	if (ret) {
 		printf("Creating cm_thread failed.\n");
 		goto out1;
 	}
 
 	if (cb->server) {
-		ret = pthread_create(&cb->server_daemon, NULL, run_server, cb);
+		ret = pthread_create(&cb->server_daemon, NULL, run_df_server,
+				     cb);
 		if (ret) {
 			printf("Creating server daemon failed.\n");
 			goto out1;
 		}
 	} else
-		run_client(cb);
+		run_df_client(cb);
 
 	return cb;
 
@@ -1086,7 +1087,7 @@ out4:
  * 
  * @param cb 
  */
-void destroy_rdma_client(struct rdma_ch_cb *cb)
+void df_destroy_rdma_client(struct rdma_ch_cb *cb)
 {
 	if (cb->server) {
 		log_warn("destroy_rdma_ch() is for client.");
@@ -1104,7 +1105,7 @@ void destroy_rdma_client(struct rdma_ch_cb *cb)
 	free_cb(cb);
 }
 
-void destroy_rdma_server(struct rdma_ch_cb *listening_cb)
+void df_destroy_rdma_server(struct rdma_ch_cb *listening_cb)
 {
 	struct rdma_ch_cb *cb;
 
