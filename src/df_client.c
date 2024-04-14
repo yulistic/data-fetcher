@@ -24,6 +24,11 @@ static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 	return 0;
 }
 
+static void free_databuf_bitmap(struct data_fetcher_ctx *df_ctx)
+{
+	bit_array_free(df_ctx->buf_bitmap.map);
+}
+
 /**
  * @brief Initialize Data Fetcher client. It registers RDMA MRs.
  * 
@@ -83,6 +88,7 @@ err1:
 void destroy_df_client(struct data_fetcher_ctx *df_ctx)
 {
 	df_destroy_rdma_client(df_ctx->ch_cb);
+	free_databuf_bitmap(df_ctx);
 	free(df_ctx);
 }
 

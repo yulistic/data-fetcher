@@ -92,7 +92,7 @@ static int cma_event_handler(struct rdma_cm_id *cma_id,
 	int ret = 0;
 	struct rdma_ch_cb *cb = cma_id->context;
 
-	log_debug("cma_event type %s cma_id %p (%s)\n",
+	log_debug("cma_event type %s cma_id %p (%s)",
 		  rdma_event_str(event->event), cma_id,
 		  (cma_id == cb->cm_id) ? "parent" : "child");
 
@@ -119,12 +119,12 @@ static int cma_event_handler(struct rdma_cm_id *cma_id,
 		set_remote_mr_info(cb, (struct remote_mr_info *)
 					       event->param.conn.private_data);
 
-		log_debug("child cma %p\n", cb->child_cm_id);
+		log_debug("child cma %p", cb->child_cm_id);
 		sem_post(&cb->sem);
 		break;
 
 	case RDMA_CM_EVENT_ESTABLISHED:
-		log_debug("ESTABLISHED\n");
+		log_debug("ESTABLISHED");
 
 		/*
 		 * Server will wake up when first RECV completes.
@@ -307,7 +307,7 @@ static int setup_qp(struct rdma_ch_cb *cb, struct rdma_cm_id *cm_id)
 		ret = errno;
 		goto err2;
 	}
-	log_debug("created cq %p\n", cb->cq);
+	log_debug("created cq %p", cb->cq);
 
 	ret = ibv_req_notify_cq(cb->cq, 0);
 	if (ret) {
