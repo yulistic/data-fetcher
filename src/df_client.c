@@ -122,7 +122,7 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 		if (ret)
 			break;
 		else {
-			log_error("Failed to alloc a databuf id.\n");
+			log_error("Failed to alloc a databuf id. (sleep 1 sec)");
 			sleep(1);
 		}
 	}
