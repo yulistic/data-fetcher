@@ -5,6 +5,7 @@
 #include "df_rdma.h"
 #include "data_fetcher.h"
 #include "bit_array.h"
+#include <unistd.h>
 
 static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 {
@@ -120,8 +121,10 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 
 		if (ret)
 			break;
-		else
-			log_info("Failed to alloc a databuf id.\n");
+		else {
+			log_error("Failed to alloc a databuf id.\n");
+			sleep(1);
+		}
 	}
 
 	return bit_id;
