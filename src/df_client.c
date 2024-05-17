@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "global.h"
 #include "log.h"
 #include "df_rdma.h"
 #include "data_fetcher.h"

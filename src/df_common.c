@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include "global.h"
 #include "bit_array.h"
 #include "data_fetcher.h"
 #include "df_rdma.h"

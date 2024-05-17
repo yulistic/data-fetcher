@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "global.h"
 #include "log.h"
 #include "df_rdma.h"
 #include "bit_array.h"

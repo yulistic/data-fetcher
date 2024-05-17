@@ -12,6 +12,7 @@
 // #include <netinet/in.h>
 // #include <infiniband/arch.h>
 #include <rdma/rdma_cma.h>
+#include "global.h"
 #include "df_rdma.h"
 #include "log.h"
 
