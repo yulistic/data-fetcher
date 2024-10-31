@@ -148,7 +148,7 @@ static int cma_event_handler(struct rdma_cm_id *cma_id,
 		break;
 
 	case RDMA_CM_EVENT_DISCONNECTED:
-		log_info("%s got DISCONNECT EVENT... \n",
+		log_info("Data Fetcher %s got CLIENT DISCONNECTED event.",
 				cb->server ? "server" : "client", cb);
 		cb->state = DISCONNECTED;
 		sem_post(&cb->sem);
