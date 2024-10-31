@@ -52,3 +52,6 @@ Mkfile.old
 dkms.conf
 
 doc/out
+
+.cache
+.vscode
