@@ -141,27 +141,27 @@ static int cma_event_handler(struct rdma_cm_id *cma_id,
 	case RDMA_CM_EVENT_CONNECT_ERROR:
 	case RDMA_CM_EVENT_UNREACHABLE:
 	case RDMA_CM_EVENT_REJECTED:
-		fprintf(stderr, "cma event %s, error %d\n",
-			rdma_event_str(event->event), event->status);
+		log_error("cma event %s, error %d\n",
+				rdma_event_str(event->event), event->status);
 		sem_post(&cb->sem);
 		ret = -1;
 		break;
 
 	case RDMA_CM_EVENT_DISCONNECTED:
-		fprintf(stderr, "%s DISCONNECT EVENT...\n",
-			cb->server ? "server" : "client");
+		log_info("%s got DISCONNECT EVENT... \n",
+				cb->server ? "server" : "client", cb);
 		cb->state = DISCONNECTED;
 		sem_post(&cb->sem);
 		break;
 
 	case RDMA_CM_EVENT_DEVICE_REMOVAL:
-		fprintf(stderr, "cma detected device removal!!!!\n");
+		log_error("cma detected device removal!!!!\n");
 		ret = -1;
 		break;
 
 	default:
-		fprintf(stderr, "unhandled event: %s, ignoring\n",
-			rdma_event_str(event->event));
+		log_warn("unhandled event: %s, ignoring\n",
+				rdma_event_str(event->event));
 		break;
 	}
 
@@ -663,13 +663,17 @@ static void *server_thread(void *arg)
 		goto err3;
 	}
 
+	log_info("Client is connected.");
+
 	while (cb->state != DISCONNECTED) {
 		sleep(1);
 	}
 
+	log_info("Freeing resources allocated for the client.");
+
 	rdma_disconnect(cb->child_cm_id);
 
-	// pthread_cancel(cb->cqthread);
+	pthread_cancel(cb->cqthread);
 	pthread_join(cb->cqthread, NULL);
 
 	deregister_mrs(cb);
@@ -697,7 +701,7 @@ void *run_df_server(void *arg)
 {
 	int ret;
 	char res[50];
-	struct rdma_ch_cb *cb;
+	struct rdma_ch_cb *child_cb;
 	pthread_attr_t attr;
 	struct rdma_ch_cb *listening_cb = (struct rdma_ch_cb *)arg;
 
@@ -721,7 +725,7 @@ void *run_df_server(void *arg)
 		goto err;
 	}
 
-	log_info("Waiting client's connect request.");
+	log_info("Waiting a client...");
 
 	while (1) {
 		sem_wait(&listening_cb->sem);
@@ -734,15 +738,18 @@ void *run_df_server(void *arg)
 		}
 
 		// CB for a new client. TODO: support multi-client.
-		cb = clone_cb(listening_cb);
-		if (!cb) {
+		child_cb = clone_cb(listening_cb);
+		if (!child_cb) {
 			ret = -1;
 			goto err;
 		}
 
+		log_debug("Cloning cb: listening_cb=0x%lx child_cb=0x%lx",
+				listening_cb, child_cb);
+
 		// A handler thread is created when there is a new connect request.
-		ret = pthread_create(&cb->server_thread, &attr, server_thread,
-				     cb);
+		ret = pthread_create(&child_cb->server_thread, &attr, server_thread,
+				     child_cb);
 		if (ret) {
 			fprintf(stderr, "pthread_create failed.");
 			goto err;
