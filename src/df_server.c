@@ -79,6 +79,8 @@ char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length)
 	return get_buffer(df_ctx, buf_id);
 }
 
+
+
 void destroy_df_server(struct data_fetcher_ctx *df_ctx)
 {
 	df_destroy_rdma_server(df_ctx->ch_cb);
