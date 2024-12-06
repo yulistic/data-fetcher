@@ -7,6 +7,8 @@
 struct databuf_bitmap {
 	void *map; // BIT ARRAY;
 	pthread_spinlock_t lock; // databuf bitmap lock.
+	pthread_mutex_t cond_mutex;  // mutex for condition variable
+	pthread_cond_t cond;         // condition variable for databuf availability
 };
 
 struct data_fetcher_ctx {

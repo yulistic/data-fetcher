@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <pthread.h>
 #include "global.h"
 #include "log.h"
 #include "df_rdma.h"
@@ -17,6 +18,8 @@ static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 	}
 
 	pthread_spin_init(&df_ctx->buf_bitmap.lock, PTHREAD_PROCESS_PRIVATE);
+	pthread_mutex_init(&df_ctx->buf_bitmap.cond_mutex, NULL);
+	pthread_cond_init(&df_ctx->buf_bitmap.cond, NULL);
 
 	// Print for test.
 	printf("Message buffer bitmaps: ");
@@ -28,6 +31,9 @@ static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 
 static void free_databuf_bitmap(struct data_fetcher_ctx *df_ctx)
 {
+	pthread_spin_destroy(&df_ctx->buf_bitmap.lock);
+	pthread_mutex_destroy(&df_ctx->buf_bitmap.cond_mutex);
+	pthread_cond_destroy(&df_ctx->buf_bitmap.cond);
 	bit_array_free(df_ctx->buf_bitmap.map);
 }
 
@@ -104,13 +110,11 @@ static void unlock_databuf(struct data_fetcher_ctx *df_ctx)
 	pthread_spin_unlock(&df_ctx->buf_bitmap.lock);
 }
 
-// TODO: Need to profile this lock contention.
 static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 {
 	uint64_t bit_id;
 	int ret;
 
-	ret = 0;
 	while (1) {
 		lock_databuf(df_ctx);
 		ret = bit_array_find_first_clear_bit(
@@ -123,8 +127,11 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 		if (ret)
 			break;
 		else {
-			log_error("Failed to alloc a databuf id. (sleep 1 sec)");
-			sleep(1);
+			log_error("Failed to alloc a databuf id. (waiting for signal)");
+			pthread_mutex_lock(&df_ctx->buf_bitmap.cond_mutex);
+			pthread_cond_wait(&df_ctx->buf_bitmap.cond, 
+					 &df_ctx->buf_bitmap.cond_mutex);
+			pthread_mutex_unlock(&df_ctx->buf_bitmap.cond_mutex);
 		}
 	}
 
@@ -194,6 +201,9 @@ static void free_databuf_id(struct data_fetcher_ctx *df_ctx, uint64_t bit_id)
 {
 	lock_databuf(df_ctx);
 	bit_array_clear_bit(df_ctx->buf_bitmap.map, bit_id);
+	pthread_mutex_lock(&df_ctx->buf_bitmap.cond_mutex);
+	pthread_cond_signal(&df_ctx->buf_bitmap.cond);
+	pthread_mutex_unlock(&df_ctx->buf_bitmap.cond_mutex);
 	unlock_databuf(df_ctx);
 }
 
