@@ -584,10 +584,12 @@ static void deregister_mrs(struct rdma_ch_cb *cb)
 #ifdef PER_BUF_MR
 	for (i = 0; i < cb->databuf_cnt; i++) {
 		db_ctx = &cb->buf_ctxs[i];
-		ibv_dereg_mr(db_ctx->rdma_mr);
+		if (db_ctx->rdma_mr)
+			ibv_dereg_mr(db_ctx->rdma_mr);
 	}
 #else
-	ibv_dereg_mr(cb->buf_ctxs[0].rdma_mr);
+	if (cb->buf_ctxs[0].rdma_mr)
+		ibv_dereg_mr(cb->buf_ctxs[0].rdma_mr);
 
 	for (i = 0; i < cb->databuf_cnt; i++) {
 		db_ctx = &cb->buf_ctxs[i];
