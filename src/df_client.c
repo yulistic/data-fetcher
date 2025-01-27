@@ -8,6 +8,7 @@
 #include "data_fetcher.h"
 #include "bit_array.h"
 #include <unistd.h>
+#include "df_shm.h"
 
 static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 {
@@ -78,9 +79,10 @@ int init_df_client(char *target, int port, uint64_t databuf_size,
 	df_ctx->ch_cb = df_init_rdma_ch(&rdma_attr);
 	if (!df_ctx->ch_cb) {
 		log_error("Failed to initialize RDMA channel.");
-		goto err1;
+		goto err2;
 	}
 
+	df_ctx->transport = DF_TRANSPORT_RDMA;
 	log_info("Data fetcher client initialized.");
 
 	// Return df context.
@@ -88,6 +90,43 @@ int init_df_client(char *target, int port, uint64_t databuf_size,
 
 	return 0;
 
+err2:
+	free_databuf_bitmap(df_ctx);
+err1:
+	free(df_ctx);
+	return -1;
+}
+
+int init_df_client_shm(const char *shm_name, uint64_t databuf_size, int databuf_cnt,
+                      struct data_fetcher_ctx **df_ctx_p)
+{
+	struct data_fetcher_ctx *df_ctx;
+	int ret;
+
+	df_ctx = calloc(1, sizeof(*df_ctx));
+	if (!df_ctx) {
+		log_error("Memory allocation failed.");
+		return -1;
+	}
+
+	ret = init_databuf_bitmap(df_ctx, databuf_cnt);
+	if (ret < 0) {
+		log_error("Failed to init databuf bitmap.");
+		goto err1;
+	}
+
+	df_ctx->shm_cb = df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 0);
+	if (!df_ctx->shm_cb) {
+		log_error("Failed to initialize shared memory channel");
+		goto err2;
+	}
+
+	df_ctx->transport = DF_TRANSPORT_SHM;
+	*df_ctx_p = df_ctx;
+	return 0;
+
+err2:
+	free_databuf_bitmap(df_ctx);
 err1:
 	free(df_ctx);
 	return -1;
@@ -95,7 +134,13 @@ err1:
 
 void destroy_df_client(struct data_fetcher_ctx *df_ctx)
 {
-	df_destroy_rdma_client(df_ctx->ch_cb);
+	if (df_ctx->transport == DF_TRANSPORT_RDMA) {
+		df_destroy_rdma_client(df_ctx->ch_cb);
+	} else { // DF_TRANSPORT_SHM
+		df_destroy_shm_ch(df_ctx->shm_cb);
+		// Note: Client does not call shm_unlink()
+	}
+
 	free_databuf_bitmap(df_ctx);
 	free(df_ctx);
 }
@@ -139,27 +184,45 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 }
 
 /**
- * @brief Set the RDMA buffer. Server will fetch it with an RDMA read operation.
+ * @brief Returns the buffer size.
  * 
  * @param df_ctx 
- * @param data Data to be copied to data buffer.
- * @param length The length of copied data. It should be less than `databuf_size`.
+ * @return uint64_t 
+ */
+uint64_t df_buf_size(struct data_fetcher_ctx *df_ctx)
+{
+	if (df_ctx->transport == DF_TRANSPORT_RDMA) {
+		struct rdma_ch_cb *ch_cb = (struct rdma_ch_cb *)df_ctx->ch_cb;
+		return ch_cb->databuf_size;
+	} else { // DF_TRANSPORT_SHM
+		struct shm_ch_cb *shm_cb = (struct shm_ch_cb *)df_ctx->shm_cb;
+		return shm_cb->databuf_size;
+	}
+}
+
+/**
+ * @brief Set the buffer with data. Server will fetch it with RDMA read or access it directly via shared memory.
+ * 
+ * @param df_ctx 
+ * @param data Data to be copied to buffer.
+ * @param length The length of copied data. It should be less than buffer size.
  * @return int Allocated buf_id. It needs to be delivered to Server.
  */
 int df_set_buffer(struct data_fetcher_ctx *df_ctx, char *data, uint64_t length)
 {
-	char *rdma_buf;
+	char *buf;
 	int buf_id;
-	struct rdma_ch_cb *ch_cb;
 
-	ch_cb = (struct rdma_ch_cb *)df_ctx->ch_cb;
+	// Check length against buffer size
+	if (length > df_buf_size(df_ctx)) {
+		log_error("Data length exceeds buffer size");
+		return -1;
+	}
 
 	buf_id = alloc_databuf_id(df_ctx);
-	rdma_buf = get_buffer(df_ctx, buf_id);
+	buf = get_buffer(df_ctx, buf_id);
 
-	assert(length <= ch_cb->databuf_size);
-
-	memcpy(rdma_buf, data, length);
+	memcpy(buf, data, length);
 
 	return buf_id;
 }
@@ -181,20 +244,6 @@ int df_alloc_buffer(struct data_fetcher_ctx *df_ctx, char **buf_p)
 	*buf_p = get_buffer(df_ctx, buf_id);
 
 	return buf_id;
-}
-
-/**
- * @brief Returns the RDMA buffer size.
- * 
- * @param df_ctx 
- * @return uint64_t 
- */
-uint64_t df_buf_size(struct data_fetcher_ctx *df_ctx)
-{
-	struct rdma_ch_cb *ch_cb;
-
-	ch_cb = (struct rdma_ch_cb *)df_ctx->ch_cb;
-	return ch_cb->databuf_size;
 }
 
 static void free_databuf_id(struct data_fetcher_ctx *df_ctx, uint64_t bit_id)
