@@ -69,6 +69,12 @@ err1:
 char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length)
 {
 	int ret;
+	// Check the length does not exceed the uint32_t.
+	if (length > UINT32_MAX) {
+		log_error("Length exceeds uint32_t.");
+		return NULL;
+	}
+
 	ret = df_post_rdma_read(df_ctx->ch_cb, buf_id, length);
 
 	if (ret < 0) {
@@ -78,8 +84,6 @@ char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length)
 
 	return get_buffer(df_ctx, buf_id);
 }
-
-
 
 void destroy_df_server(struct data_fetcher_ctx *df_ctx)
 {
