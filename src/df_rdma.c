@@ -174,9 +174,17 @@ void *df_cm_thread(void *arg)
 	struct rdma_cm_event *event;
 	int ret;
 
-	while (1) {
+	log_debug("cm_thread started.");
+
+	while (!cb->stop_cm_thread) {
+		pthread_testcancel();
+
 		ret = rdma_get_cm_event(cb->cm_channel, &event);
 		if (ret) {
+			if (cb->stop_cm_thread) {
+				log_debug("cm_thread exiting due to stop flag");
+				break;
+			}
 			fprintf(stderr, "rdma_get_cm_event");
 			exit(ret);
 		}
@@ -185,6 +193,9 @@ void *df_cm_thread(void *arg)
 		if (ret)
 			exit(ret);
 	}
+
+	log_debug("cm_thread exiting normally.");
+	return NULL;
 }
 
 static int bind_server(struct rdma_ch_cb *cb)
@@ -446,6 +457,48 @@ err2:
 	return ret;
 }
 
+/**
+ * @brief Send a dummy RDMA request to wake up the CQ thread
+ * 
+ * @param cb The RDMA channel control block
+ * @return int 0 on success, non-zero on failure
+ */
+static int send_dummy_request(struct rdma_ch_cb *cb)
+{
+    struct ibv_send_wr wr, *bad_wr = NULL;
+    struct ibv_sge sge;
+    int ret;
+    
+    // We only need to provide minimal valid SGE
+    if (cb->databuf_cnt == 0 || cb->buf_ctxs == NULL) {
+        log_error("No buffer available for dummy request");
+        return -1;
+    }
+    
+    // Use the first buffer's SGE as a template
+    memset(&wr, 0, sizeof(wr));
+    memset(&sge, 0, sizeof(sge));
+    
+    sge.addr = (uint64_t)(unsigned long)cb->buf_ctxs[0].rdma_buf;
+    sge.length = 1; // Minimal size
+    sge.lkey = cb->buf_ctxs[0].rdma_mr->lkey;
+    
+    wr.wr_id = 0xDEADBEEF; // Special ID to identify dummy request
+    wr.opcode = IBV_WR_SEND;
+    wr.sg_list = &sge;
+    wr.num_sge = 1;
+    wr.send_flags = IBV_SEND_SIGNALED; // Generate completion
+    
+    log_debug("Posting dummy request to wake up CQ thread");
+    ret = ibv_post_send(cb->qp, &wr, &bad_wr);
+    if (ret) {
+        log_error("Failed to post dummy request: %s", strerror(errno));
+        return ret;
+    }
+    
+    return 0;
+}
+
 static int cq_event_handler(struct rdma_ch_cb *cb)
 {
 	struct ibv_wc wc;
@@ -465,6 +518,12 @@ static int cq_event_handler(struct rdma_ch_cb *cb)
 				  wc.status);
 			ret = -1;
 			goto error;
+		}
+
+		// Ignore dummy requests used for waking up the thread
+		if (wc.wr_id == 0xDEADBEEF) {
+			log_debug("Received dummy request completion");
+			continue;
 		}
 
 		switch (wc.opcode) {
@@ -532,7 +591,7 @@ static void *cq_thread(void *arg)
 
 	log_debug("cq_thread started.");
 
-	while (1) {
+	while (!cb->stop_cq_thread) {
 		pthread_testcancel();
 
 		ret = ibv_get_cq_event(cb->channel, &ev_cq, &ev_ctx);
@@ -554,6 +613,9 @@ static void *cq_thread(void *arg)
 		if (ret)
 			pthread_exit(NULL);
 	}
+
+	log_debug("cq_thread exiting normally.");
+	return NULL;
 }
 
 static int do_accept(struct rdma_ch_cb *cb)
@@ -667,7 +729,7 @@ static void *server_thread(void *arg)
 
 	log_info("Client is connected.");
 
-	while (cb->state != DISCONNECTED) {
+	while (cb->state != DISCONNECTED && !cb->stop_cq_thread) {
 		sleep(1);
 	}
 
@@ -676,6 +738,10 @@ static void *server_thread(void *arg)
 	rdma_disconnect(cb->child_cm_id);
 
 	pthread_cancel(cb->cqthread);
+	// Send a dummy request to wake up the CQ thread
+	if (cb->qp && cb->state == CONNECTED) {
+		send_dummy_request(cb);
+	}
 	pthread_join(cb->cqthread, NULL);
 
 	deregister_mrs(cb);
@@ -731,6 +797,10 @@ void *run_df_server(void *arg)
 
 	while (1) {
 		sem_wait(&listening_cb->sem);
+		if (listening_cb->stop_cm_thread) {
+			log_debug("cm_thread exiting due to stop flag");
+			break;
+		}
 		if (listening_cb->state != CONNECT_REQUEST) {
 			fprintf(stderr,
 				"Wait for CONNECT_REQUEST state but state is %d\n",
@@ -757,6 +827,11 @@ void *run_df_server(void *arg)
 			goto err;
 		}
 	}
+
+	rdma_destroy_id(listening_cb->cm_id);
+	rdma_destroy_event_channel(listening_cb->cm_channel);
+	free_cb(listening_cb);
+	return NULL;
 
 err:
 	log_error("Failure in run_server(). ret=%d", ret);
@@ -1038,6 +1113,8 @@ struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr)
 	cb->sin.ss_family = AF_INET;
 	cb->port = htobe16(attr->port);
 	sem_init(&cb->sem, 0, 0); // Used in CM.
+	cb->stop_cq_thread = 0;   // Initialize stop flag
+	cb->stop_cm_thread = 0;   // Initialize stop flag
 
 	// Server's listening cb also allocates buf_ctxs to store remote_mr_info temporarily.
 	ret = init_buf_ctxs(cb);
@@ -1104,8 +1181,19 @@ void df_destroy_rdma_client(struct rdma_ch_cb *cb)
 		return;
 	}
 
-	rdma_disconnect(cb->cm_id);
+	// Set stop flag
+	cb->stop_cq_thread = 1;
+
+	pthread_cancel(cb->cqthread);
+
+	// Send a dummy request to wake up the CQ thread
+	if (cb->qp && cb->state == CONNECTED) {
+		send_dummy_request(cb);
+	}
+
 	pthread_join(cb->cqthread, NULL);
+
+	rdma_disconnect(cb->cm_id);
 	deregister_mrs(cb);
 	free_buffers(cb);
 	free_qp(cb);
@@ -1120,20 +1208,21 @@ void df_destroy_rdma_server(struct rdma_ch_cb *listening_cb)
 	struct rdma_ch_cb *cb;
 
 	// destroy per client.
+	log_info("Destroying per client resources.");
 	cb = listening_cb->child_cm_id->context;
-	rdma_disconnect(cb->child_cm_id);
-	pthread_join(cb->cqthread, NULL);
-	pthread_join(cb->server_thread, NULL);
-	free_buffers(cb);
-	deregister_mrs(cb);
-	free_qp(cb);
+
+	// Set stop flag
+	cb->stop_cq_thread = 1;
+	listening_cb->stop_cm_thread = 1;
+
+	// Give thread some time to exit naturally
+	sleep(1); // Shorter wait time as we've sent a signal
 
 	// destroy per server.
-	rdma_disconnect(listening_cb->cm_id);
+	log_info("Destroying per server resources.");
+	pthread_cancel(listening_cb->cmthread);
 	pthread_join(listening_cb->cmthread, NULL);
-	pthread_join(listening_cb->server_daemon, NULL);
 
-	// Free cb.
-	free_cb(cb); // per client.
-	free_cb(listening_cb); // per server.
+	sem_post(&listening_cb->sem);
+	pthread_join(listening_cb->server_daemon, NULL);
 }

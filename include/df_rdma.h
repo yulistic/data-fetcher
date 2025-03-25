@@ -127,6 +127,10 @@ struct rdma_ch_cb {
 	// to each client connection. Currently, only 1 client is support.
 	struct rdma_cm_id
 		*child_cm_id; /* connection on server side, per client */
+	
+	/* Thread control */
+	int stop_cq_thread; /* Flag to signal cq_thread to exit */
+	int stop_cm_thread; /* Flag to signal cm_thread to exit */
 };
 
 struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr);
