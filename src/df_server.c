@@ -35,12 +35,6 @@ int init_df_server(int port, uint64_t databuf_size, int databuf_cnt,
 		return -1;
 	}
 
-	// ret = init_databuf_bitmap(df_ctx, databuf_cnt);
-	// if (ret < 0) {
-	// 	log_error("Failed to init databuf bitmap.");
-	// 	goto err1;
-	// }
-
 	df_ctx->ch_cb = df_init_rdma_ch(&rdma_attr);
 	if (!df_ctx->ch_cb) {
 		log_error("Failed to initialize RDMA channel.");
@@ -55,7 +49,6 @@ int init_df_server(int port, uint64_t databuf_size, int databuf_cnt,
 	return 0;
 
 err1:
-	bit_array_free(df_ctx->buf_bitmap.map);
 	free(df_ctx);
 	return -1;
 }
@@ -100,9 +93,6 @@ void destroy_df_server(struct data_fetcher_ctx *df_ctx)
 		df_destroy_shm_ch(df_ctx->shm_cb);
 		shm_unlink(shm_cb->shm_name); // Server should remove the shared memory
 	}
-
-	pthread_spin_destroy(&df_ctx->buf_bitmap.lock);
-	bit_array_free(df_ctx->buf_bitmap.map);
 
 	free(df_ctx);
 }
