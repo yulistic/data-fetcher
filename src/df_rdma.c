@@ -371,15 +371,19 @@ static int alloc_rdma_buffers(struct rdma_ch_cb *cb)
 	int i, ret;
 	char *buf;
 
-	// Alloc one big region.
-	ret = posix_memalign((void **)&buf, sysconf(_SC_PAGESIZE),
-			     cb->databuf_size * cb->databuf_cnt);
-
-	if (ret != 0) {
-		fprintf(stderr,
-			"Allocating message buffer (rdma) failed. Error code=%d\n",
-			ret);
-		return -ENOMEM;
+	if (cb->custom_buf) {
+		log_warn("Using custom buffer.");
+		buf = (char *)cb->custom_buf;
+	} else {
+		// Alloc one big region.
+		ret = posix_memalign((void **)&buf, sysconf(_SC_PAGESIZE),
+				     cb->databuf_size * cb->databuf_cnt);
+		if (ret != 0) {
+			fprintf(stderr,
+				"Allocating message buffer (rdma) failed. Error code=%d\n",
+				ret);
+			return -ENOMEM;
+		}
 	}
 
 	// Set rdma buffer pointers.
@@ -1115,6 +1119,7 @@ struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr)
 	sem_init(&cb->sem, 0, 0); // Used in CM.
 	cb->stop_cq_thread = 0;   // Initialize stop flag
 	cb->stop_cm_thread = 0;   // Initialize stop flag
+	cb->custom_buf = attr->custom_buf;
 
 	// Server's listening cb also allocates buf_ctxs to store remote_mr_info temporarily.
 	ret = init_buf_ctxs(cb);

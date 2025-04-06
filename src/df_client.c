@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include "df_shm.h"
 
+static uint32_t g_databuf_cnt;
+
 static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 {
 	df_ctx->buf_bitmap.map = bit_array_create(databuf_cnt);
@@ -23,9 +25,11 @@ static int init_databuf_bitmap(struct data_fetcher_ctx *df_ctx, int databuf_cnt)
 	pthread_cond_init(&df_ctx->buf_bitmap.cond, NULL);
 
 	// Print for test.
-	printf("Message buffer bitmaps: ");
-	bit_array_print(df_ctx->buf_bitmap.map, stdout);
-	fputc('\n', stdout);
+	// printf("Message buffer bitmaps: ");
+	// bit_array_print(df_ctx->buf_bitmap.map, stdout);
+	// fputc('\n', stdout);
+
+	g_databuf_cnt = databuf_cnt;
 
 	return 0;
 }
@@ -179,6 +183,9 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 			pthread_mutex_unlock(&df_ctx->buf_bitmap.cond_mutex);
 		}
 	}
+
+	log_warn("Occupied databufs: %u out of %u",
+		 bit_array_num_bits_set(df_ctx->buf_bitmap.map), g_databuf_cnt);
 
 	return bit_id;
 }

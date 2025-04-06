@@ -18,7 +18,7 @@
  * @return 0 on success.
  */
 int init_df_server(int port, uint64_t databuf_size, int databuf_cnt,
-		   struct data_fetcher_ctx **df_ctx_p)
+		   struct data_fetcher_ctx **df_ctx_p, void *custom_buf)
 {
 	struct rdma_ch_attr rdma_attr;
 	struct data_fetcher_ctx *df_ctx;
@@ -27,7 +27,8 @@ int init_df_server(int port, uint64_t databuf_size, int databuf_cnt,
 	rdma_attr = (struct rdma_ch_attr){ .server = 1,
 					   .databuf_size = databuf_size,
 					   .databuf_cnt = databuf_cnt,
-					   .port = port };
+					   .port = port,
+					   .custom_buf = custom_buf };
 
 	df_ctx = calloc(1, sizeof(struct data_fetcher_ctx));
 	if (!df_ctx) {

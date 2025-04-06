@@ -43,6 +43,7 @@ struct rdma_ch_attr {
 	char ip_addr[16]; // Target server ip addr. (required by client)
 	int databuf_cnt; // The number of data buffers.
 	uint64_t databuf_size; // The size of a data buffer.
+	void *custom_buf; // If you want to use your own buffer.
 };
 
 // struct __attribute__((__packed__)) remote_mr_info {
@@ -131,6 +132,9 @@ struct rdma_ch_cb {
 	/* Thread control */
 	int stop_cq_thread; /* Flag to signal cq_thread to exit */
 	int stop_cm_thread; /* Flag to signal cm_thread to exit */
+
+	/* Custom buffer */
+	void *custom_buf; // If you want to use your own buffer.
 };
 
 struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr);

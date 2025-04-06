@@ -31,7 +31,7 @@ struct data_fetch_param {
 
 /* Server-side API */
 int init_df_server(int port, uint64_t databuf_size, int databuf_cnt,
-		   struct data_fetcher_ctx **df_ctx_p);
+		   struct data_fetcher_ctx **df_ctx_p, void *custom_buf);
 void destroy_df_server(struct data_fetcher_ctx *df_ctx);
 char *fetch_data(struct data_fetcher_ctx *df_ctx, int buf_id, uint32_t length);
 

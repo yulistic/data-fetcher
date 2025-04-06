@@ -46,7 +46,7 @@ void test_rdma_server(void)
 	int buf_id;
 	struct data_fetcher_ctx *df_ctx;
 
-	ret = init_df_server(7175, DATABUF_SIZE, DATABUF_CNT, &df_ctx);
+	ret = init_df_server(7175, DATABUF_SIZE, DATABUF_CNT, &df_ctx, NULL);
 	if (ret) {
 		log_error("init df server failed. ret=%d", ret);
 		return;
