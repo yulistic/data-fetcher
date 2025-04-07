@@ -668,7 +668,8 @@ static void free_buffers(struct rdma_ch_cb *cb)
 {
 	// Free the big region.
 	log_debug("free buf_ctxs[0].rdma_buf=%lx", cb->buf_ctxs[0].rdma_buf);
-	free(cb->buf_ctxs[0].rdma_buf);
+	if (!cb->custom_buf)
+		free(cb->buf_ctxs[0].rdma_buf);
 }
 
 static void free_qp(struct rdma_ch_cb *cb)
