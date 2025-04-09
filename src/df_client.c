@@ -257,10 +257,11 @@ static void free_databuf_id(struct data_fetcher_ctx *df_ctx, uint64_t bit_id)
 {
 	lock_databuf(df_ctx);
 	bit_array_clear_bit(df_ctx->buf_bitmap.map, bit_id);
+	unlock_databuf(df_ctx);
+
 	pthread_mutex_lock(&df_ctx->buf_bitmap.cond_mutex);
 	pthread_cond_signal(&df_ctx->buf_bitmap.cond);
 	pthread_mutex_unlock(&df_ctx->buf_bitmap.cond_mutex);
-	unlock_databuf(df_ctx);
 }
 
 /**

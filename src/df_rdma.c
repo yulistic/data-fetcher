@@ -212,9 +212,9 @@ static int bind_server(struct rdma_ch_cb *cb)
 		fprintf(stderr, "rdma_bind_addr failed.");
 		return ret;
 	}
-	log_info("rdma_bind_addr successful");
+	log_debug("rdma_bind_addr successful");
 
-	log_info("rdma_listen");
+	log_debug("rdma_listen");
 	ret = rdma_listen(cb->cm_id, 3); // FIXME: Proper backlog value?
 	if (ret) {
 		fprintf(stderr, "rdma_listen failed.");

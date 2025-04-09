@@ -5,21 +5,18 @@
 #include <pthread.h>
 
 // Add after struct data_fetcher_ctx definition
-enum df_transport {
-    DF_TRANSPORT_RDMA,
-    DF_TRANSPORT_SHM
-};
+enum df_transport { DF_TRANSPORT_RDMA, DF_TRANSPORT_SHM };
 
 struct databuf_bitmap {
 	void *map; // BIT ARRAY;
 	pthread_spinlock_t lock; // databuf bitmap lock.
-	pthread_mutex_t cond_mutex;  // mutex for condition variable
-	pthread_cond_t cond;         // condition variable for databuf availability
+	pthread_mutex_t cond_mutex; // mutex for condition variable
+	pthread_cond_t cond; // condition variable for databuf availability
 };
 
 struct data_fetcher_ctx {
 	void *ch_cb; // RDMA Channel control block. (server: listening cb, client: connect cb)
-	void *shm_cb; // Shared memory control block 
+	void *shm_cb; // Shared memory control block
 	enum df_transport transport;
 	struct databuf_bitmap buf_bitmap;
 };
@@ -48,9 +45,9 @@ void df_free_buffer(struct data_fetcher_ctx *df_ctx, int buf_id);
 void *get_buffer(struct data_fetcher_ctx *df_ctx, int buf_id);
 
 // Add new API for shared memory initialization
-int init_df_server_shm(const char *shm_name, uint64_t databuf_size, int databuf_cnt,
-                      struct data_fetcher_ctx **df_ctx_p);
-int init_df_client_shm(const char *shm_name, uint64_t databuf_size, int databuf_cnt, 
-                      struct data_fetcher_ctx **df_ctx_p);
+int init_df_server_shm(const char *shm_name, uint64_t databuf_size,
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p);
+int init_df_client_shm(const char *shm_name, uint64_t databuf_size,
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p);
 
 #endif
