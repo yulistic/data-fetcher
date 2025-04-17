@@ -184,7 +184,7 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 		}
 	}
 
-	log_warn("Occupied databufs: %u out of %u",
+	log_info("Occupied databufs: %u out of %u",
 		 bit_array_num_bits_set(df_ctx->buf_bitmap.map), g_databuf_cnt);
 
 	return bit_id;
