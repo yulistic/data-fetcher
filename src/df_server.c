@@ -92,34 +92,47 @@ void destroy_df_server(struct data_fetcher_ctx *df_ctx)
 	} else { // DF_TRANSPORT_SHM
 		struct shm_ch_cb *shm_cb = df_ctx->shm_cb;
 		df_destroy_shm_ch(df_ctx->shm_cb);
-		shm_unlink(shm_cb->shm_name); // Server should remove the shared memory
+		shm_unlink(
+			shm_cb->shm_name); // Server should remove the shared memory
 	}
 
 	free(df_ctx);
 }
 
-int init_df_server_shm(const char *shm_name, uint64_t databuf_size, int databuf_cnt,
-                      struct data_fetcher_ctx **df_ctx_p)
+int init_df_server_shm(const char *shm_name, uint64_t databuf_size,
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p,
+		       off_t offset)
 {
-    struct data_fetcher_ctx *df_ctx;
+	struct data_fetcher_ctx *df_ctx;
 
-    df_ctx = calloc(1, sizeof(*df_ctx));
-    if (!df_ctx) {
-        log_error("Memory allocation failed.");
-        return -1;
-    }
+	df_ctx = calloc(1, sizeof(*df_ctx));
+	if (!df_ctx) {
+		log_error("Memory allocation failed.");
+		return -1;
+	}
 
-    df_ctx->shm_cb = df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 1);
-    if (!df_ctx->shm_cb) {
-        log_error("Failed to initialize shared memory channel");
-        goto err1;
-    }
+	df_ctx->shm_cb =
+		df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 1, offset);
+	if (!df_ctx->shm_cb) {
+		log_error("Failed to initialize shared memory channel");
+		goto err1;
+	}
 
-    df_ctx->transport = DF_TRANSPORT_SHM;
-    *df_ctx_p = df_ctx;
-    return 0;
+	df_ctx->transport = DF_TRANSPORT_SHM;
+	*df_ctx_p = df_ctx;
+	return 0;
 
 err1:
-    free(df_ctx);
-    return -1;
+	free(df_ctx);
+	return -1;
+}
+
+void *df_get_shm_buf_base(struct data_fetcher_ctx *df_ctx)
+{
+	return get_shm_buf_base(df_ctx->shm_cb);
+}
+
+size_t df_get_shm_buf_size(struct data_fetcher_ctx *df_ctx)
+{
+	return get_shm_buf_size(df_ctx->shm_cb);
 }

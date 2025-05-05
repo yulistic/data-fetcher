@@ -101,8 +101,9 @@ err1:
 	return -1;
 }
 
-int init_df_client_shm(const char *shm_name, uint64_t databuf_size, int databuf_cnt,
-                      struct data_fetcher_ctx **df_ctx_p)
+int init_df_client_shm(const char *shm_name, uint64_t databuf_size,
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p,
+		       off_t offset)
 {
 	struct data_fetcher_ctx *df_ctx;
 	int ret;
@@ -119,7 +120,8 @@ int init_df_client_shm(const char *shm_name, uint64_t databuf_size, int databuf_
 		goto err1;
 	}
 
-	df_ctx->shm_cb = df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 0);
+	df_ctx->shm_cb =
+		df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 0, offset);
 	if (!df_ctx->shm_cb) {
 		log_error("Failed to initialize shared memory channel");
 		goto err2;
@@ -176,16 +178,18 @@ static uint64_t alloc_databuf_id(struct data_fetcher_ctx *df_ctx)
 		if (ret)
 			break;
 		else {
-			log_error("Failed to alloc a databuf id. (waiting for signal)");
+			log_error(
+				"Failed to alloc a databuf id. (waiting for signal)");
 			pthread_mutex_lock(&df_ctx->buf_bitmap.cond_mutex);
-			pthread_cond_wait(&df_ctx->buf_bitmap.cond, 
-					 &df_ctx->buf_bitmap.cond_mutex);
+			pthread_cond_wait(&df_ctx->buf_bitmap.cond,
+					  &df_ctx->buf_bitmap.cond_mutex);
 			pthread_mutex_unlock(&df_ctx->buf_bitmap.cond_mutex);
 		}
 	}
 
-	log_info("Occupied databufs: %u out of %u",
-		 bit_array_num_bits_set(df_ctx->buf_bitmap.map), g_databuf_cnt);
+	log_debug("Occupied databufs: %u out of %u",
+		  bit_array_num_bits_set(df_ctx->buf_bitmap.map),
+		  g_databuf_cnt);
 
 	return bit_id;
 }

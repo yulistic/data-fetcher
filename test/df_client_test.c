@@ -59,7 +59,8 @@ void test_shm_client(void)
 	int buf_id, i, ret;
 	int len;
 
-	ret = init_df_client_shm("/df_test_shm", DATABUF_SIZE, DATABUF_CNT, &df_ctx);
+	ret = init_df_client_shm("/df_test_shm", DATABUF_SIZE, DATABUF_CNT,
+				 &df_ctx, 0);
 	if (ret < 0) {
 		log_error("Failed to init shm client. ret=%d", ret);
 		return;
