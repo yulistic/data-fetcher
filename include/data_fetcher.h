@@ -46,11 +46,9 @@ void *get_buffer(struct data_fetcher_ctx *df_ctx, int buf_id);
 
 // Add new API for shared memory initialization
 int init_df_server_shm(const char *shm_name, uint64_t databuf_size,
-		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p,
-		       off_t offset);
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p);
 int init_df_client_shm(const char *shm_name, uint64_t databuf_size,
-		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p,
-		       off_t offset);
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p);
 
 void *df_get_shm_buf_base(struct data_fetcher_ctx *df_ctx);
 size_t df_get_shm_buf_size(struct data_fetcher_ctx *df_ctx);

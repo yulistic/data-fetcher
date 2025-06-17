@@ -14,7 +14,7 @@ struct shm_ch_cb {
 };
 
 void *df_init_shm_ch(const char *shm_name, uint64_t databuf_size,
-		     int databuf_cnt, int is_server, off_t offset);
+		     int databuf_cnt, int is_server);
 void df_destroy_shm_ch(void *cb);
 void *get_shm_buffer(void *cb, int buf_id);
 void *get_shm_buf_base(void *cb);

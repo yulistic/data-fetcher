@@ -100,8 +100,7 @@ void destroy_df_server(struct data_fetcher_ctx *df_ctx)
 }
 
 int init_df_server_shm(const char *shm_name, uint64_t databuf_size,
-		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p,
-		       off_t offset)
+		       int databuf_cnt, struct data_fetcher_ctx **df_ctx_p)
 {
 	struct data_fetcher_ctx *df_ctx;
 
@@ -111,8 +110,7 @@ int init_df_server_shm(const char *shm_name, uint64_t databuf_size,
 		return -1;
 	}
 
-	df_ctx->shm_cb =
-		df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 1, offset);
+	df_ctx->shm_cb = df_init_shm_ch(shm_name, databuf_size, databuf_cnt, 1);
 	if (!df_ctx->shm_cb) {
 		log_error("Failed to initialize shared memory channel");
 		goto err1;

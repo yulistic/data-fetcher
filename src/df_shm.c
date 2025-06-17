@@ -17,11 +17,10 @@
  * @param databuf_size 
  * @param databuf_cnt 
  * @param is_server 
- * @param offset Offset of the mapped region. (An offset in the hugepage file.)
  * @return void* 
  */
 void *df_init_shm_ch(const char *shm_name, uint64_t databuf_size,
-		     int databuf_cnt, int is_server, off_t offset)
+		     int databuf_cnt, int is_server)
 {
 	struct shm_ch_cb *cb;
 	size_t total_size;
@@ -50,14 +49,14 @@ void *df_init_shm_ch(const char *shm_name, uint64_t databuf_size,
 		goto err_free;
 	}
 
-	ret = ftruncate(cb->shm_fd, aligned_size + offset);
+	ret = ftruncate(cb->shm_fd, aligned_size);
 	if (ret < 0) {
 		log_error("Failed to set shared memory size");
 		goto err_close;
 	}
 
 	cb->shm_base = mmap(NULL, aligned_size, PROT_READ | PROT_WRITE,
-			    MAP_SHARED | MAP_HUGETLB, cb->shm_fd, offset);
+			    MAP_SHARED | MAP_HUGETLB, cb->shm_fd, 0);
 	if (cb->shm_base == MAP_FAILED) {
 		log_error("Failed to map shared memory");
 		goto err_close;

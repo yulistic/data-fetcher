@@ -74,7 +74,7 @@ void test_shm_server(void)
 	struct data_fetcher_ctx *df_ctx;
 
 	ret = init_df_server_shm("/df_test_shm", DATABUF_SIZE, DATABUF_CNT,
-				 &df_ctx, 0);
+				 &df_ctx);
 	if (ret) {
 		log_error("init df server shm failed. ret=%d", ret);
 		return;
