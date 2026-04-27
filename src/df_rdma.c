@@ -151,6 +151,20 @@ static int cma_event_handler(struct rdma_cm_id *cma_id,
 		log_info("Data Fetcher %s got CLIENT DISCONNECTED event.",
 				cb->server ? "server" : "client", cb);
 		cb->state = DISCONNECTED;
+		if (cb->parent_cb &&
+		    cb->parent_cb->child_cm_id == cb->child_cm_id) {
+			cb->parent_cb->child_cm_id = NULL;
+		}
+		if (cb->parent_cb) {
+			pthread_mutex_lock(&cb->parent_cb->child_lock);
+			if (cb->parent_cb->active_child_cb == cb)
+				cb->parent_cb->active_child_cb = NULL;
+			pthread_mutex_unlock(&cb->parent_cb->child_lock);
+		}
+		pthread_mutex_lock(&cb->op_lock);
+		cb->closing = 1;
+		pthread_cond_broadcast(&cb->op_cond);
+		pthread_mutex_unlock(&cb->op_lock);
 		sem_post(&cb->sem);
 		break;
 
@@ -235,10 +249,28 @@ static struct rdma_ch_cb *clone_cb(struct rdma_ch_cb *listening_cb)
 
 	*cb = *listening_cb; // shallow copy.
 	cb->child_cm_id->context = cb;
+	cb->parent_cb = listening_cb;
+	cb->active_child_cb = NULL;
+	pthread_mutex_init(&cb->child_lock, NULL);
+	pthread_mutex_init(&cb->op_lock, NULL);
+	pthread_cond_init(&cb->op_cond, NULL);
+	cb->pending_ops = 0;
+	cb->closing = 0;
+
+	pthread_mutex_lock(&listening_cb->child_lock);
+	listening_cb->active_child_cb = cb;
+	pthread_mutex_unlock(&listening_cb->child_lock);
 
 	// Alloc and init buf_ctxs.
 	ret = init_buf_ctxs(cb);
 	if (ret < 0) {
+		pthread_mutex_lock(&listening_cb->child_lock);
+		if (listening_cb->active_child_cb == cb)
+			listening_cb->active_child_cb = NULL;
+		pthread_mutex_unlock(&listening_cb->child_lock);
+		pthread_cond_destroy(&cb->op_cond);
+		pthread_mutex_destroy(&cb->op_lock);
+		pthread_mutex_destroy(&cb->child_lock);
 		free(cb);
 		return NULL;
 	}
@@ -650,12 +682,14 @@ static void deregister_mrs(struct rdma_ch_cb *cb)
 #ifdef PER_BUF_MR
 	for (i = 0; i < cb->databuf_cnt; i++) {
 		db_ctx = &cb->buf_ctxs[i];
-		if (db_ctx->rdma_mr)
+		if (db_ctx->rdma_mr) {
 			ibv_dereg_mr(db_ctx->rdma_mr);
+		}
 	}
 #else
-	if (cb->buf_ctxs[0].rdma_mr)
+	if (cb->buf_ctxs[0].rdma_mr) {
 		ibv_dereg_mr(cb->buf_ctxs[0].rdma_mr);
+	}
 
 	for (i = 0; i < cb->databuf_cnt; i++) {
 		db_ctx = &cb->buf_ctxs[i];
@@ -684,6 +718,9 @@ static void free_cb(struct rdma_ch_cb *cb)
 {
 	log_debug("free cb->buf_ctxs=%lx", cb->buf_ctxs);
 	free_buf_ctxs(cb);
+	pthread_cond_destroy(&cb->op_cond);
+	pthread_mutex_destroy(&cb->op_lock);
+	pthread_mutex_destroy(&cb->child_lock);
 	log_debug("free cb=%lx", cb);
 	free(cb);
 }
@@ -740,13 +777,29 @@ static void *server_thread(void *arg)
 
 	log_info("Freeing resources allocated for the client.");
 
+	pthread_mutex_lock(&cb->op_lock);
+	cb->closing = 1;
+	while (cb->pending_ops > 0)
+		pthread_cond_wait(&cb->op_cond, &cb->op_lock);
+	pthread_mutex_unlock(&cb->op_lock);
+
+	if (cb->parent_cb &&
+	    cb->parent_cb->child_cm_id == cb->child_cm_id) {
+		cb->parent_cb->child_cm_id = NULL;
+	}
+	if (cb->parent_cb) {
+		pthread_mutex_lock(&cb->parent_cb->child_lock);
+		if (cb->parent_cb->active_child_cb == cb)
+			cb->parent_cb->active_child_cb = NULL;
+		pthread_mutex_unlock(&cb->parent_cb->child_lock);
+	}
+
 	rdma_disconnect(cb->child_cm_id);
 
 	pthread_cancel(cb->cqthread);
 	// Send a dummy request to wake up the CQ thread
-	if (cb->qp && cb->state == CONNECTED) {
+	if (cb->qp && cb->state == CONNECTED)
 		send_dummy_request(cb);
-	}
 	pthread_join(cb->cqthread, NULL);
 
 	deregister_mrs(cb);
@@ -969,8 +1022,53 @@ int df_post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
 	struct ibv_send_wr *send_wr;
 	int ret;
 
-	// Get connection cb. TODO: multi-client support.
-	cb = server_cb->child_cm_id->context;
+	if (!server_cb) {
+		log_error("RDMA read failed: server cb is NULL.");
+		return -1;
+	}
+
+	pthread_mutex_lock(&server_cb->child_lock);
+	cb = server_cb->active_child_cb;
+	if (!cb) {
+		pthread_mutex_unlock(&server_cb->child_lock);
+		log_error("RDMA read failed: no active child connection.");
+		return -1;
+	}
+	pthread_mutex_lock(&cb->op_lock);
+	if (cb->closing || cb->state == DISCONNECTED || cb->state == ERROR) {
+		pthread_mutex_unlock(&cb->op_lock);
+		pthread_mutex_unlock(&server_cb->child_lock);
+		log_error("RDMA read failed: child connection is not active (state=%d closing=%d).",
+			  cb->state, cb->closing);
+		return -1;
+	}
+	cb->pending_ops++;
+	pthread_mutex_unlock(&cb->op_lock);
+	pthread_mutex_unlock(&server_cb->child_lock);
+
+	if (!cb) {
+		log_error("RDMA read failed: child connection context is NULL.");
+		ret = -1;
+		goto out;
+	}
+	if (!cb->qp || !cb->buf_ctxs) {
+		log_error("RDMA read failed: child connection resources are missing (qp=%p buf_ctxs=%p).",
+			  cb->qp, cb->buf_ctxs);
+		ret = -1;
+		goto out;
+	}
+	if (databuf_id < 0 || databuf_id >= cb->databuf_cnt) {
+		log_error("RDMA read failed: invalid databuf_id=%d databuf_cnt=%d.",
+			  databuf_id, cb->databuf_cnt);
+		ret = -1;
+		goto out;
+	}
+	if (length > cb->databuf_size) {
+		log_error("RDMA read failed: length=%u exceeds databuf_size=%lu.",
+			  length, cb->databuf_size);
+		ret = -1;
+		goto out;
+	}
 
 	// FYI, send_wr == cb->buf_ctxs[databuf_id].rdma_sgl;
 	send_wr = &cb->buf_ctxs[databuf_id].rdma_sq_wr;
@@ -979,7 +1077,8 @@ int df_post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
 	ret = ibv_post_send(cb->qp, send_wr, &bad_wr);
 	if (ret) {
 		log_error("Post READ error %d", ret);
-		return -1;
+		ret = -1;
+		goto out;
 	}
 
 	// Wait for the post completion.
@@ -988,7 +1087,15 @@ int df_post_rdma_read(struct rdma_ch_cb *server_cb, int databuf_id,
 	wait_post_completion(&cb->buf_ctxs[databuf_id]);
 	log_debug("Post completed. Resume thread. databuf_id=%d", databuf_id);
 
-	return 0;
+	ret = 0;
+out:
+	pthread_mutex_lock(&cb->op_lock);
+	if (cb->pending_ops > 0)
+		cb->pending_ops--;
+	if (cb->closing && cb->pending_ops == 0)
+		pthread_cond_signal(&cb->op_cond);
+	pthread_mutex_unlock(&cb->op_lock);
+	return ret;
 }
 
 static int run_df_client(struct rdma_ch_cb *cb)
@@ -1121,6 +1228,9 @@ struct rdma_ch_cb *df_init_rdma_ch(struct rdma_ch_attr *attr)
 	cb->stop_cq_thread = 0;   // Initialize stop flag
 	cb->stop_cm_thread = 0;   // Initialize stop flag
 	cb->custom_buf = attr->custom_buf;
+	pthread_mutex_init(&cb->child_lock, NULL);
+	pthread_mutex_init(&cb->op_lock, NULL);
+	pthread_cond_init(&cb->op_cond, NULL);
 
 	// Server's listening cb also allocates buf_ctxs to store remote_mr_info temporarily.
 	ret = init_buf_ctxs(cb);

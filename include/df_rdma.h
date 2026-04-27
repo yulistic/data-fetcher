@@ -128,6 +128,13 @@ struct rdma_ch_cb {
 	// to each client connection. Currently, only 1 client is support.
 	struct rdma_cm_id
 		*child_cm_id; /* connection on server side, per client */
+	struct rdma_ch_cb *parent_cb; /* listening cb for a cloned child cb */
+	struct rdma_ch_cb *active_child_cb; /* current child for a listening cb */
+	pthread_mutex_t child_lock; /* protects active_child_cb */
+	pthread_mutex_t op_lock; /* protects pending_ops and closing */
+	pthread_cond_t op_cond;
+	uint32_t pending_ops;
+	int closing;
 	
 	/* Thread control */
 	int stop_cq_thread; /* Flag to signal cq_thread to exit */
